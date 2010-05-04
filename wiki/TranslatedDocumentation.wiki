@@ -1,0 +1,71 @@
+#labels Featured,Phase-Design,Phase-Implementation
+Main thing of this project is a frame labels -- special labels can be executed as commands.
+<img src="http://as3-asset-modifier.googlecode.com/svn/trunk/Original%20files/flash_label1.png">
+
+These labels are attached to the animation and exported with the rest of the content in SWF/SWC file. When a programmer creates a copy of the animation, he must pass it in a method ModifierManager.apply(). ModifierManager searching in frames and if it finds the necessary labels(which contains command), it replaces the frame with the code, prepared in modifier. Code will be injected by the method MovieClip.addFrameScript () in frame with a label that points to the modifier. You should note that the code injected in the animation calls only code from modifiers handler, no additional code will be executed, so the animation should play the same way as if animator pasted the code directly into the frame in the Flash IDE. 
+
+Modifier, a class that implements an interface IAssetModifier, must return an instance of Function - this function will perform the role of code in the frame. 
+{{{
+package aw.projects.assetmodifier.modifiers{
+	import flash.display.MovieClip;
+ 
+	/**
+	 * @author Galaburda a_[w] Oleg
+	 */
+	public class AssetStopModifier extends Object implements IAssetModifier{
+		static public const LABEL:String = 'stop';
+		public function AssetStopModifier():void{
+			super();
+		}
+		public function get label():String{
+			return LABEL;
+		}
+		public function getHandler(clip:MovieClip, rawParametersString:String=''):Function{
+			var handler:Function = function():void{
+				arguments.callee.target.stop();
+			};
+			(handler as Object).target = clip;
+			return handler;
+		}
+	}
+}
+}}}
+
+Each modifier contains label to which it is attached. To use modifiers, they must be registered with the manager of modifiers. To register, you can use one of two methods of manager: 
+  * registerModifier(modifier:IAssetModifier):void - registers an instance if modifier that can be reusable
+  * registerModifierByDefinition(label:String, definition:Class):void - registers the class of modifiers, in this case, for each frame will be created own copy of the modifier
+{{{
+var manager:ModifierManager = new ModifierManager();
+manager.registerModifier(new AssetStopModifier());
+manager.registerModifier(new ExampleInstanceModifier());
+manager.registerModifierByDefinition(ExampleDefinitionModifier.LABEL, ExampleDefinitionModifier);
+}}}
+
+You can create instances of manager or use the same static methods, as a variant of the global manager. Each manager contains a command identifier, which separates any labels and asset modifier commands – this is a symbol that precedes each command label. Global manager, or any other by default use the dot character as an identifier. This means that if the modifier is registered with the label "label", then, with the identifier by default, it should be used as ".label". 
+
+Each label can contain some of the data enclosed in parentheses -.label(raw parameters). Such data are not processed and passed to the modifier "as is". But project includes a class ModifierParserUtils, which is able to process 
+  * list of arguments as a list of values .label("value1", "value2", "value3", true, 123) In such a case will return an array 
+  * list of parameters as a list of named values .label(parameter1="value1", parameter2="value2", parameter3="value3", parameterBool=true, parameterInt=123) In such a case will be returned an instance of Object with the values in corresponding parameters of the object 
+
+Currently project contains such modifiers:
+  * AssetBrakepointModifier - sets brakepoint to frame 
+  * AssetCustomModifier - calls handler passed into modifiers constructor (AssetCustomModifier.handler), have no default label
+  * AssetEventModifier – dispatches event described in command
+  * AssetGotoModifier - makes the transition to specified frame, analog MovieClip.gotoAndPlay()/MovieClip.gotoAndStop()
+  * AssetMultiModifier - container for multiple modifiers, the modifiers can be grouped to call them in one frame, have no default label
+  * AssetStopModifier – MovieClip.stop()
+  * AssetTraceModifier - displays a message in the console, trace 
+<img src="http://as3-asset-modifier.googlecode.com/svn/trunk/Original%20files/flash_label2.png">
+
+Implementing modifiers interface allows you to create absolutely any modifiers. And using different identifiers, you can separate custom modifiers to groups
+
+Also, project contains special classes named constructors: 
+  * AssetConstructor - serves a copy of the template animation 
+  * MultiAssetConstructor - abstract class for the service group of animation templates 
+
+Such constructors created to help programmer create assets which already patched with already injected code. It contains a reference to animation template class, and a reference to the ModifierManager instance, and each time, when an instance of the animation creates it applying this animation to ModifierManager. If you does not pass specific ModifierManager instance, it will use global manager. 
+{{{
+var constructor:AssetConstructor = new AssetConstructor(ASSET_DEFINITION);
+asset = constructor.getAsset();
+this.addChild(asset);
+}}}
